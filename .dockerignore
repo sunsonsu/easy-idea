@@ -1,0 +1,25 @@
+# --- Secrets & Credentials ---
+token.json
+credentials.json
+service-account.json
+.env
+
+# --- Python Environment & Cache ---
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+env/
+.pytest_cache/
+
+# --- Git & Documentation ---
+.git
+.gitignore
+README.md
+LICENSE
+
+# --- OS Trash ---
+.DS_Store
+Thumbs.db
