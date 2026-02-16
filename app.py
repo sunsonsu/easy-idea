@@ -1,7 +1,8 @@
 import os
 import json
 import datetime
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Security, Depends
+from fastapi.security.api_key import APIKeyHeader
 from pydantic import BaseModel
 from dotenv import load_dotenv
 from google import genai
@@ -13,8 +14,29 @@ from googleapiclient.discovery import build
 
 load_dotenv()
 
-app = FastAPI(title="Easy Idea API")
+app = FastAPI(
+    title="Easy Idea API",
+    description="API สำหรับวิจัยคอนเทนต์และบันทึกลง Google Docs พร้อมระบบป้องกันด้วย API Key"
+)
 
+# --- Security Configuration ---
+API_KEY_NAME = "access_token" # ชื่อ Header ที่ต้องใส่ใน Swagger/Request
+api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
+
+def get_api_key(header_value: str = Security(api_key_header)):
+    """ตรวจสอบรหัสผ่านจาก Header"""
+    # ดึงรหัสผ่านที่ตั้งไว้จาก Secret Manager / Env
+    expected_key = os.getenv("APP_API_KEY") 
+    
+    if header_value == expected_key:
+        return header_value
+    
+    raise HTTPException(
+        status_code=403,
+        detail="Could not validate credentials: รหัสผ่านไม่ถูกต้อง หรือไม่ได้ระบุ access_token"
+    )
+
+# --- Google API Configuration ---
 SCOPES = [
     'https://www.googleapis.com/auth/documents',
     'https://www.googleapis.com/auth/drive' 
@@ -23,11 +45,11 @@ SCOPES = [
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 google_search_tool = types.Tool(google_search=types.GoogleSearch())
 
+# --- Helper Functions ---
+
 def get_common_creds():
-    """Get User Token from Secret Manager (Environment Variable) or Local File"""
-    creds = None
-    
     token_json_str = os.getenv("USER_TOKEN_JSON")
+    creds = None
     
     if token_json_str:
         token_data = json.loads(token_json_str)
@@ -36,29 +58,23 @@ def get_common_creds():
         if os.path.exists('token.json'):
             creds = Credentials.from_authorized_user_file('token.json', SCOPES)
     
-    # Refresh token if expired
     if creds and creds.expired and creds.refresh_token:
         creds.refresh(Request())
         
     if not creds:
-        raise Exception("Credential NOT FOUND: token.json not found in Local and Secret Manager")
-        
+        raise Exception("Credential NOT FOUND: token.json missing")
     return creds
 
 def get_gdocs_service():
-    creds = get_common_creds()
-    return build('docs', 'v1', credentials=creds)
+    return build('docs', 'v1', credentials=get_common_creds())
 
 def get_drive_service():
-    creds = get_common_creds()
-    return build('drive', 'v3', credentials=creds)
+    return build('drive', 'v3', credentials=get_common_creds())
 
 def create_doc(title, content):
-
     drive_service = get_drive_service()
     docs_service = get_gdocs_service()
     
-    # --- Folder Drive ID ---
     FOLDER_ID = os.getenv("GOOGLE_DRIVE_FOLDER_ID")
     
     file_metadata = {
@@ -67,11 +83,9 @@ def create_doc(title, content):
         'parents': [FOLDER_ID] 
     }
     
-    # create file
     doc_file = drive_service.files().create(body=file_metadata, fields='id').execute()
     doc_id = doc_file.get('id')
     
-    # write content
     requests = [{'insertText': {'location': {'index': 1}, 'text': content}}]
     docs_service.documents().batchUpdate(documentId=doc_id, body={'requests': requests}).execute()
     
@@ -82,14 +96,14 @@ class ContentRequest(BaseModel):
     topic: str
     save_to_docs: bool = True
 
+# --- API Endpoints ---
 @app.get("/")
 def read_root():
-    return {"status": "Easy Idea OK!"}
+    return {"status": "Easy Idea OK!", "auth_type": "API Key Required"}
 
 @app.post("/generate")
-async def generate_content(req: ContentRequest):
+async def generate_content(req: ContentRequest, auth: str = Depends(get_api_key)):
     try:
-        # เรียกใช้ Gemini
         response = client.models.generate_content(
             model='gemini-2.5-flash-lite',
             contents=req.topic,
@@ -115,9 +129,9 @@ async def generate_content(req: ContentRequest):
         return {"error": str(e)}
 
 @app.post("/daily-job")
-async def daily_job():
+async def daily_job(auth: str = Depends(get_api_key)):
     topic = "สรุปข่าวน่าสนใจประจำวันเกี่ยวกับเทคโนโลยี AI และการตลาด พร้อมแนวโน้มในอนาคต"
-    return await generate_content(ContentRequest(topic=topic, save_to_docs=True))
+    return await generate_content(ContentRequest(topic=topic, save_to_docs=True), auth)
 
 if __name__ == "__main__":
     import uvicorn
