@@ -1,77 +1,133 @@
-🤖 Easy Idea API: Gemini Research & Docs Writer
-Easy Idea API คือระบบผู้ช่วยวิจัยอัจฉริยะที่ใช้พลังของ Gemini 2.5 Flash-lite ในการค้นหาข้อมูลจากอินเทอร์เน็ต (Google Search Grounding) สรุปเนื้อหา และบันทึกผลการค้นหาลงใน Google Docs โดยอัตโนมัติภายใต้บัญชีของคุณเอง
+# Easy Idea API: Gemini Research and Docs Writer
 
-This project is an intelligent research assistant that leverages Gemini 2.5 Flash-lite to browse the web, summarize findings, and automatically generate structured reports in Google Docs using your personal account.
+Easy Idea API คือระบบผู้ช่วยวิจัยอัจฉริยะที่ใช้ Gemini ในการค้นหาข้อมูลจากอินเทอร์เน็ต, สรุปเนื้อหา, และบันทึกผลลัพธ์ลง Google Docs อัตโนมัติภายใต้บัญชีของคุณเอง
 
-🛠️ Setup & Installation (การตั้งค่าระบบ)
-1. Environment Variables
-สร้างไฟล์ .env ไว้ที่โฟลเดอร์หลัก และใส่ค่าดังนี้:
-Create a .env file in the root directory with the following values:
+This project is an intelligent research assistant that leverages Gemini to browse the web, summarize findings, and automatically generate structured reports in Google Docs using your personal account.
 
-ข้อมูลโค้ด
+## Features
+
+- RAG workflow with Gemini + Google Search grounding
+- ChromaDB vector store for knowledge retrieval
+- Gemini Embeddings for semantic search
+- Auto-save generated report to Google Docs
+- Daily scheduler (07:00) for automatic knowledge updates
+- Frontend model selector where options come from backend only
+
+## Project Structure
+
+```text
+easy-idea/
+├── src/
+│   ├── app/
+│   │   ├── main.py
+│   │   ├── services/
+│   │   ├── rag/
+│   │   └── templates/
+│   └── auth_setup.py
+├── requirements.txt
+├── docker-compose.yml
+└── credentials.json (local only, do not commit)
+```
+
+## Setup and Installation (การตั้งค่าระบบ)
+
+### 1. Create `.env`
+
+สร้างไฟล์ `.env` ไว้ที่โฟลเดอร์หลัก
+Create a `.env` file in the root directory:
+
+```env
 GEMINI_API_KEY=your_gemini_api_key_here
+APP_API_KEY=your_access_token_for_api
 GOOGLE_DRIVE_FOLDER_ID=your_google_drive_folder_id_here
 
-GOOLGLE_DRIVE_FOLDER_ID หาได้จาก URL ของ Folder นั้น ๆ เช่น
-https://drive.google.com/drive/folders/{GOOLGLE_DRIVE_FOLDER_ID }
+# ChromaDB (local dev with docker-compose)
+CHROMA_HOST=localhost
+CHROMA_PORT=8001
+CHROMA_COLLECTION_NAME=easy_idea_kb
 
-2. Google Cloud API Setup (การตั้งค่า Google Cloud)
-ไปที่ Google Cloud Console: API Credentials
-(Go to Google Cloud Console and ensure your project is selected.)
+# Model and app config
+GEMINI_MODEL=gemini-2.5-flash-lite
+GEMINI_EMBEDDING_MODEL=models/gemini-embedding-001
+GEMINI_TEMPERATURE=0.7
+HOST=0.0.0.0
+PORT=8080
+LOG_LEVEL=INFO
+```
 
-กด [+ CREATE CREDENTIALS] -> เลือก OAuth client ID
-(Click Create Credentials and select OAuth client ID.)
+`GOOGLE_DRIVE_FOLDER_ID` หาได้จาก URL ของโฟลเดอร์ เช่น:
+`https://drive.google.com/drive/folders/{GOOGLE_DRIVE_FOLDER_ID}`
 
-หากระบบให้ตั้งค่า Configure Consent Screen:
+### 2. Google Cloud API Setup (OAuth)
 
-เลือก External กรอกข้อมูลพื้นฐานให้ครบแล้วกด Save
-(If prompted, configure the Consent Screen as 'External' and fill in the required info.)
+1. ไปที่ Google Cloud Console และเลือกโปรเจกต์ที่ต้องการ
+2. ไปที่ `APIs & Services` -> `Credentials`
+3. กด `+ CREATE CREDENTIALS` -> `OAuth client ID`
+4. ถ้าระบบให้ตั้งค่า Consent Screen ให้เลือก `External` แล้วกรอกข้อมูลให้ครบ
+5. สร้าง Client ID โดยเลือก `Desktop app`
+6. ดาวน์โหลดไฟล์ JSON, เปลี่ยนชื่อเป็น `credentials.json`, วางไว้ที่ root ของโปรเจกต์
+7. เพิ่มอีเมลของคุณใน `Test Users`
 
-สร้าง Client ID โดยเลือก Application type เป็น Desktop app
-(Create Client ID with 'Desktop app' as the application type.)
+## How to Use (ขั้นตอนการใช้งาน)
 
-ดาวน์โหลดไฟล์ JSON และเปลี่ยนชื่อเป็น credentials.json วางไว้ในโฟลเดอร์โปรเจกต์
-(Download the JSON file, rename it to credentials.json, and place it in the project folder.)
+### Step 1: Install dependencies
 
-อย่าลืมเพิ่มอีเมลตัวเองในส่วน Test Users
-(Don't forget to add your email in Test Users section)
-
-🚀 How to Use (ขั้นตอนการใช้งาน)
-Step 1: Install Dependencies
-Bash
+```bash
 pip install -r requirements.txt
-Step 2: Generate Access Token
-รันสคริปต์เพื่อล็อกอินและขอสิทธิ์เข้าถึง Google Drive/Docs:
-Run the authentication script to generate your token.json:
+```
 
-Bash
-python auth_setup.py
-จะมีหน้าต่างเบราว์เซอร์เด้งขึ้นมา ให้กดอนุญาต (Allow) จนเสร็จสิ้น
-(A browser window will open. Grant the necessary permissions.)
+### Step 2: Generate Google token
 
-Step 3: Run the Application
-เริ่มต้นการทำงานของ FastAPI Server:
-Start the FastAPI server:
+รันสคริปต์เพื่อล็อกอินและสร้าง `token.json`:
 
-Bash
-python app.py
-แอปพลิเคชันจะรันที่ http://localhost:8080 คุณสามารถเข้าชม API Documentation ได้ที่ /docs
-(The app will run at http://localhost:8080. Access the interactive API docs at /docs.)
+```bash
+python src/auth_setup.py
+```
 
-☁️ Deployment (การติดตั้งบน Cloud)
-สำหรับ Google Cloud Run, ให้ทำตามขั้นตอนนี้:
-For Google Cloud Run, follow these steps:
+ระบบจะเปิด browser ให้กดอนุญาตสิทธิ์ (Google Docs/Drive) แล้วจะสร้าง `token.json` ที่ root
 
-นำเนื้อหาในไฟล์ token.json ไปใส่ใน Secret Manager ชื่อ USER_TOKEN_JSON
-(Add the content of token.json to Google Cloud Secret Manager as USER_TOKEN_JSON.)
+### Step 3: Run application
 
-ตั้งค่า Environment Variable ใน Cloud Run ให้ Map เข้ากับ Secret ดังกล่าว
-(Map the Secret to an environment variable in your Cloud Run settings.)
+```bash
+python src/app/main.py
+```
 
-ตรวจสอบให้แน่ใจว่าได้ใส่ GEMINI_API_KEY ในหน้า Configuration
-(Ensure GEMINI_API_KEY is added to the Cloud Run environment variables.)
+- API base URL: `http://localhost:8080`
+- Swagger docs: `http://localhost:8080/docs`
+- UI chat: `http://localhost:8080/ui/chat`
 
-⚠️ Security Note (หมายเหตุความปลอดภัย)
-DO NOT commit credentials.json or token.json to public repositories.
+### Optional: Run with Docker Compose
 
-ห้าม นำไฟล์ credentials.json หรือ token.json ขึ้น GitHub ที่เป็นสาธารณะโดยเด็ดขาด (ควรใส่ไว้ใน .gitignore)
+```bash
+docker compose up --build
+```
+
+## Daily Scheduler
+
+ระบบมี scheduler ภายในแอปที่รันทุกวันเวลา 07:00 (server local time) เพื่อ:
+
+- สร้างหัวข้อสรุปเทรนด์ประจำวัน
+- ใช้ Google Search เพื่อเสริมข้อมูล
+- บันทึกผลลง ChromaDB
+- สร้างเอกสารใน Google Docs
+
+สามารถทดสอบด้วย manual trigger ได้ที่ `POST /daily-job`
+
+## Deployment (Google Cloud)
+
+สำหรับ Cloud deployment:
+
+1. เก็บ `USER_TOKEN_JSON` ใน Secret Manager โดยนำค่า JSON จาก `token.json` ไปใส่
+2. map secret เป็น environment variable `USER_TOKEN_JSON` ใน service
+3. ตั้งค่า environment variables ที่จำเป็น เช่น `GEMINI_API_KEY`, `APP_API_KEY`, `GOOGLE_DRIVE_FOLDER_ID`
+
+Important note:
+
+- ถ้าใช้ Cloud Run (stateless/scale-to-zero), scheduler ในตัวแอปอาจไม่ทำงานสม่ำเสมอ
+- สำหรับ production แนะนำใช้ `Cloud Scheduler` ยิง `POST /daily-job` วันละครั้ง
+
+## Security Note
+
+- Do not commit `credentials.json` or `token.json` to public repositories
+- ควรเก็บ secrets ทั้งหมดใน environment variables หรือ Secret Manager
+- ตรวจสอบว่าไฟล์ลับอยู่ใน `.gitignore`

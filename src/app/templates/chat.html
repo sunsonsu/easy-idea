@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+
+{% block title %}Idea Chat — Easy Idea{% endblock %}
+{% block nav_chat %}bg-gray-800 text-indigo-300{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto px-4 py-6 flex flex-col h-[calc(100vh-8rem)]">
+
+    <!-- Chat header -->
+    <div class="flex items-center justify-between mb-4">
+        <div>
+            <h1 class="text-xl font-bold">💬 Idea Chat</h1>
+            <p class="text-gray-400 text-xs mt-0.5">ค้นหาไอเดียจาก Knowledge Base และสร้างเนื้อหาใหม่ด้วย AI</p>
+        </div>
+        <button onclick="setApiKey()" class="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded-lg text-xs transition">🔑 Access Token</button>
+    </div>
+
+    <!-- Chat messages -->
+    <div id="chatMessages" class="flex-1 overflow-y-auto space-y-4 pb-4 pr-1">
+        <!-- Welcome message -->
+        <div class="flex gap-3 fade-in">
+            <div class="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-sm flex-shrink-0">🤖</div>
+            <div class="bg-gray-900 border border-gray-800 rounded-2xl rounded-tl-sm px-4 py-3 max-w-[85%]">
+                <p class="text-sm text-gray-300">สวัสดีครับ! พิมพ์หัวข้อหรือไอเดียที่สนใจได้เลย ผมจะค้นหาจาก Knowledge Base หรือเสิร์ชข้อมูล แล้วสร้างเนื้อหาให้ครับ 🚀</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Input area -->
+    <div class="border-t border-gray-800 pt-4">
+        <!-- Options row -->
+        <div class="flex flex-wrap gap-3 mb-3 text-xs">
+            <label class="flex items-center gap-1.5 cursor-pointer">
+                <input type="checkbox" id="optSearch" checked class="rounded bg-gray-800 border-gray-600 text-indigo-500 focus:ring-indigo-500">
+                <span class="text-gray-400">Google Search</span>
+            </label>
+            <label class="flex items-center gap-1.5 cursor-pointer">
+                <input type="checkbox" id="optDocs" class="rounded bg-gray-800 border-gray-600 text-indigo-500 focus:ring-indigo-500">
+                <span class="text-gray-400">Save to Google Docs</span>
+            </label>
+            <label class="flex items-center gap-1.5 cursor-pointer">
+                <input type="checkbox" id="optKnowledge" class="rounded bg-gray-800 border-gray-600 text-indigo-500 focus:ring-indigo-500">
+                <span class="text-gray-400">Save to Knowledge</span>
+            </label>
+            <!-- Model selector -->
+            <div class="flex items-center gap-1.5 ml-auto">
+                <span class="text-gray-500">🤖 Model:</span>
+                <select id="modelSelect"
+                    class="bg-gray-800 border border-gray-700 text-gray-300 rounded-lg px-2 py-1 text-xs focus:ring-1 focus:ring-indigo-500 outline-none cursor-pointer">
+                    <option value="">Loading…</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Input box -->
+        <div class="flex gap-2">
+            <input id="chatInput" type="text" placeholder="พิมพ์หัวข้อหรือไอเดียที่สนใจ…"
+                class="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                onkeydown="if(event.key==='Enter' && !event.shiftKey) { event.preventDefault(); sendMessage(); }" />
+            <button id="sendBtn" onclick="sendMessage()"
+                class="px-5 py-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 rounded-xl text-sm font-medium transition">
+                Send ➤
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const chatMessages = document.getElementById('chatMessages');
+const chatInput = document.getElementById('chatInput');
+const sendBtn = document.getElementById('sendBtn');
+const modelSelect = document.getElementById('modelSelect');
+
+// โหลดรายการ models จาก backend เท่านั้น
+async function loadModels() {
+    try {
+        const data = await apiFetch('/api/models');
+        modelSelect.innerHTML = '';
+        data.models.forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m.id;
+            opt.textContent = m.display_name;
+            if (m.id === data.default || m.id.endsWith(data.default)) {
+                opt.selected = true;
+            }
+            modelSelect.appendChild(opt);
+        });
+    } catch (e) {
+        modelSelect.innerHTML = '<option value="">⚠ Error loading models</option>';
+    }
+}
+
+loadModels();
+
+function addMessage(role, html, extra) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'flex gap-3 fade-in';
+
+    const isUser = role === 'user';
+    const avatar = isUser
+        ? '<div class="w-8 h-8 rounded-full bg-emerald-600 flex items-center justify-center text-sm flex-shrink-0">🧑</div>'
+        : '<div class="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-sm flex-shrink-0">🤖</div>';
+
+    const bubbleClass = isUser
+        ? 'bg-emerald-900/40 border border-emerald-800 rounded-2xl rounded-tr-sm'
+        : 'bg-gray-900 border border-gray-800 rounded-2xl rounded-tl-sm';
+
+    let extraHtml = '';
+    if (extra) {
+        if (extra.google_docs_url) {
+            extraHtml += `<a href="${extra.google_docs_url}" target="_blank" class="inline-block mt-2 px-3 py-1 bg-blue-900/50 text-blue-300 rounded-lg text-xs hover:bg-blue-800/50 transition">📄 Open Google Doc</a> `;
+        }
+        if (extra.ingested_chunks > 0) {
+            extraHtml += `<span class="inline-block mt-2 px-3 py-1 bg-green-900/50 text-green-300 rounded-lg text-xs">✅ Saved ${extra.ingested_chunks} chunks to Knowledge</span> `;
+        }
+        if (extra.context_used) {
+            extraHtml += `<span class="inline-block mt-2 px-3 py-1 bg-purple-900/40 text-purple-300 rounded-lg text-xs">📚 Used Knowledge Base context</span>`;
+        }
+    }
+
+    if (isUser) {
+        wrapper.className += ' justify-end';
+        wrapper.innerHTML = `
+            <div class="${bubbleClass} px-4 py-3 max-w-[85%]">
+                <p class="text-sm text-gray-200 chat-bubble">${escHtml(html)}</p>
+            </div>
+            ${avatar}`;
+    } else {
+        wrapper.innerHTML = `
+            ${avatar}
+            <div class="${bubbleClass} px-4 py-3 max-w-[85%]">
+                <div class="text-sm text-gray-300 chat-bubble">${html}</div>
+                ${extraHtml ? '<div class="mt-2">' + extraHtml + '</div>' : ''}
+            </div>`;
+    }
+
+    chatMessages.appendChild(wrapper);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+    return wrapper;
+}
+
+function addLoading() {
+    const el = addMessage('ai', '<span class="inline-flex gap-1"><span class="animate-bounce">●</span><span class="animate-bounce" style="animation-delay:.15s">●</span><span class="animate-bounce" style="animation-delay:.3s">●</span></span> Thinking…');
+    el.id = 'loadingMsg';
+    return el;
+}
+
+function removeLoading() {
+    const el = document.getElementById('loadingMsg');
+    if (el) el.remove();
+}
+
+async function sendMessage() {
+    const text = chatInput.value.trim();
+    if (!text) return;
+
+    chatInput.value = '';
+    sendBtn.disabled = true;
+    chatInput.disabled = true;
+
+    addMessage('user', text);
+    addLoading();
+
+    try {
+        const body = {
+            topic: text,
+            model: modelSelect.value || null,
+            use_google_search: document.getElementById('optSearch').checked,
+            save_to_docs: document.getElementById('optDocs').checked,
+            save_to_knowledge: document.getElementById('optKnowledge').checked
+        };
+
+        const data = await apiFetch('/generate', { method: 'POST', body: JSON.stringify(body) });
+
+        removeLoading();
+
+        // Format AI response — convert newlines to <br> and basic markdown bold
+        let formatted = escHtml(data.ai_response || '')
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\n/g, '<br>');
+
+        addMessage('ai', formatted, {
+            google_docs_url: data.google_docs_url,
+            ingested_chunks: data.ingested_chunks || 0,
+            context_used: data.context_used
+        });
+
+        // Show references if any
+        if (data.references && data.references.length > 0) {
+            const refHtml = '<details class="mt-1"><summary class="text-xs text-gray-500 cursor-pointer hover:text-gray-400">📎 ' + data.references.length + ' references from Knowledge Base</summary>'
+                + '<div class="mt-2 space-y-2">' + data.references.map((r, i) =>
+                    '<div class="text-xs bg-gray-800/50 rounded-lg p-2 text-gray-400">'
+                    + '<span class="text-indigo-400 font-mono mr-1">[' + (i + 1) + ']</span>'
+                    + escHtml(r.length > 200 ? r.slice(0, 200) + '…' : r)
+                    + '</div>'
+                ).join('') + '</div></details>';
+            addMessage('ai', refHtml);
+        }
+
+    } catch (e) {
+        removeLoading();
+        addMessage('ai', `<span class="text-red-400">❌ Error: ${escHtml(e.message)}</span>`);
+    } finally {
+        sendBtn.disabled = false;
+        chatInput.disabled = false;
+        chatInput.focus();
+    }
+}
+
+function escHtml(text) { const d = document.createElement('div'); d.textContent = text; return d.innerHTML; }
+
+// Auto-focus input
+chatInput.focus();
+</script>
+{% endblock %}

@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+
+{% block title %}Knowledge Base — Easy Idea{% endblock %}
+{% block nav_docs %}bg-gray-800 text-indigo-300{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 py-8">
+
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h1 class="text-2xl font-bold">📄 Knowledge Base</h1>
+            <p class="text-gray-400 text-sm mt-1">รายการเอกสารทั้งหมดใน ChromaDB — <span id="totalCount">…</span> chunks</p>
+        </div>
+        <div class="flex gap-2">
+            <button onclick="loadDocs()" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm transition">🔄 Refresh</button>
+            <button onclick="setApiKey()" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm transition">🔑 Access Token</button>
+        </div>
+    </div>
+
+    <!-- Filter bar -->
+    <div class="flex gap-3 mb-4">
+        <select id="sourceFilter" onchange="loadDocs()" class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:ring-indigo-500 focus:border-indigo-500">
+            <option value="">All Sources</option>
+        </select>
+        <input id="searchBox" type="text" placeholder="Search in documents…" class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:ring-indigo-500 focus:border-indigo-500" />
+        <button onclick="filterDocs()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm transition">Search</button>
+    </div>
+
+    <!-- Docs table -->
+    <div class="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
+        <table class="w-full text-sm">
+            <thead class="bg-gray-800 text-gray-400 text-left">
+                <tr>
+                    <th class="px-4 py-3 w-16">#</th>
+                    <th class="px-4 py-3">Content Preview</th>
+                    <th class="px-4 py-3 w-44">Source</th>
+                    <th class="px-4 py-3 w-44">Ingested At</th>
+                </tr>
+            </thead>
+            <tbody id="docsBody" class="divide-y divide-gray-800">
+                <tr><td colspan="4" class="px-4 py-8 text-center text-gray-500">Loading…</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Pagination -->
+    <div class="flex items-center justify-between mt-4 text-sm text-gray-400">
+        <span id="pageInfo">Page 1</span>
+        <div class="flex gap-2">
+            <button id="prevBtn" onclick="changePage(-1)" disabled class="px-3 py-1.5 bg-gray-800 rounded-lg disabled:opacity-40 hover:bg-gray-700 transition">← Prev</button>
+            <button id="nextBtn" onclick="changePage(1)" class="px-3 py-1.5 bg-gray-800 rounded-lg disabled:opacity-40 hover:bg-gray-700 transition">Next →</button>
+        </div>
+    </div>
+</div>
+
+<!-- Detail modal -->
+<div id="detailModal" class="fixed inset-0 bg-black/70 hidden items-center justify-center z-50" onclick="closeModal(event)">
+    <div class="bg-gray-900 border border-gray-700 rounded-2xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto p-6 fade-in" onclick="event.stopPropagation()">
+        <div class="flex justify-between items-start mb-4">
+            <h2 class="text-lg font-bold text-indigo-300" id="modalTitle">Document Detail</h2>
+            <button onclick="document.getElementById('detailModal').classList.add('hidden');document.getElementById('detailModal').classList.remove('flex')" class="text-gray-400 hover:text-white text-xl">&times;</button>
+        </div>
+        <pre id="modalContent" class="whitespace-pre-wrap text-sm text-gray-300 leading-relaxed"></pre>
+        <div id="modalMeta" class="mt-4 text-xs text-gray-500 border-t border-gray-700 pt-3"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentPage = 0;
+const PAGE_SIZE = 20;
+let allDocs = { ids: [], documents: [], metadatas: [] };
+
+async function loadDocs() {
+    try {
+        const data = await apiFetch('/api/knowledge/list?limit=500');
+        allDocs = data;
+        document.getElementById('totalCount').textContent = data.ids.length;
+
+        // Populate source filter
+        const sources = [...new Set(data.metadatas.map(m => m.source || 'unknown'))];
+        const sel = document.getElementById('sourceFilter');
+        const current = sel.value;
+        sel.innerHTML = '<option value="">All Sources</option>' + sources.map(s =>
+            `<option value="${s}" ${s===current?'selected':''}>${s}</option>`
+        ).join('');
+
+        currentPage = 0;
+        renderPage();
+    } catch (e) {
+        document.getElementById('docsBody').innerHTML = `<tr><td colspan="4" class="px-4 py-8 text-center text-red-400">${e.message}</td></tr>`;
+    }
+}
+
+function getFiltered() {
+    const srcFilter = document.getElementById('sourceFilter').value;
+    const search = document.getElementById('searchBox').value.toLowerCase();
+    const indices = [];
+    for (let i = 0; i < allDocs.ids.length; i++) {
+        if (srcFilter && (allDocs.metadatas[i].source || '') !== srcFilter) continue;
+        if (search && !(allDocs.documents[i] || '').toLowerCase().includes(search)) continue;
+        indices.push(i);
+    }
+    return indices;
+}
+
+function filterDocs() { currentPage = 0; renderPage(); }
+
+function renderPage() {
+    const filtered = getFiltered();
+    const start = currentPage * PAGE_SIZE;
+    const pageItems = filtered.slice(start, start + PAGE_SIZE);
+    const tbody = document.getElementById('docsBody');
+
+    if (pageItems.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="px-4 py-8 text-center text-gray-500">No documents found</td></tr>';
+    } else {
+        tbody.innerHTML = pageItems.map((idx, j) => {
+            const doc = allDocs.documents[idx] || '';
+            const meta = allDocs.metadatas[idx] || {};
+            const preview = doc.length > 120 ? doc.slice(0, 120) + '…' : doc;
+            return `<tr class="hover:bg-gray-800/50 cursor-pointer transition" onclick="showDetail(${idx})">
+                <td class="px-4 py-3 text-gray-500">${start + j + 1}</td>
+                <td class="px-4 py-3 text-gray-300">${escHtml(preview)}</td>
+                <td class="px-4 py-3"><span class="px-2 py-0.5 bg-gray-800 rounded text-xs text-indigo-300">${escHtml(meta.source || 'unknown')}</span></td>
+                <td class="px-4 py-3 text-gray-500 text-xs">${meta.ingested_at ? new Date(meta.ingested_at).toLocaleString('th-TH') : '-'}</td>
+            </tr>`;
+        }).join('');
+    }
+
+    const totalPages = Math.ceil(filtered.length / PAGE_SIZE) || 1;
+    document.getElementById('pageInfo').textContent = `Page ${currentPage + 1} of ${totalPages} (${filtered.length} items)`;
+    document.getElementById('prevBtn').disabled = currentPage === 0;
+    document.getElementById('nextBtn').disabled = start + PAGE_SIZE >= filtered.length;
+}
+
+function changePage(dir) { currentPage += dir; renderPage(); }
+
+function showDetail(idx) {
+    document.getElementById('modalTitle').textContent = `Document #${idx + 1}`;
+    document.getElementById('modalContent').textContent = allDocs.documents[idx] || '';
+    const meta = allDocs.metadatas[idx] || {};
+    document.getElementById('modalMeta').innerHTML = Object.entries(meta).map(([k, v]) => `<span class="mr-4"><strong>${k}:</strong> ${escHtml(String(v))}</span>`).join('');
+    const modal = document.getElementById('detailModal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function closeModal(e) { if (e.target === e.currentTarget) { e.currentTarget.classList.add('hidden'); e.currentTarget.classList.remove('flex'); } }
+
+function escHtml(text) { const d = document.createElement('div'); d.textContent = text; return d.innerHTML; }
+
+// Initial load
+loadDocs();
+</script>
+{% endblock %}
