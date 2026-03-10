@@ -43,7 +43,7 @@ GOOGLE_DRIVE_FOLDER_ID=your_google_drive_folder_id_here
 
 # ChromaDB (local dev with docker-compose)
 CHROMA_HOST=localhost
-CHROMA_PORT=8001
+CHROMA_PORT=8000
 CHROMA_COLLECTION_NAME=easy_idea_kb
 
 # Model and app config
