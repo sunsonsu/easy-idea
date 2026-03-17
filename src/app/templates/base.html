@@ -21,10 +21,11 @@
     <!-- Navbar -->
     <nav class="bg-gray-900 border-b border-gray-800 sticky top-0 z-50">
         <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-            <a href="/ui" class="text-xl font-bold text-indigo-400 hover:text-indigo-300 transition">💡 Easy Idea</a>
+            <a href="/" class="text-xl font-bold text-indigo-400 hover:text-indigo-300 transition">💡 Easy Idea</a>
             <div class="flex gap-4 text-sm">
+                <a href="/" class="px-3 py-1.5 rounded-lg hover:bg-gray-800 transition {% block nav_home %}{% endblock %}">🏠 Home</a>
+                <a href="/ui/chat" class="px-3 py-1.5 rounded-lg hover:bg-gray-800 transition {% block nav_chat %}{% endblock %}">💬 Custom Prompt</a>
                 <a href="/ui/docs-list" class="px-3 py-1.5 rounded-lg hover:bg-gray-800 transition {% block nav_docs %}{% endblock %}">📄 Knowledge Base</a>
-                <a href="/ui/chat" class="px-3 py-1.5 rounded-lg hover:bg-gray-800 transition {% block nav_chat %}{% endblock %}">💬 Idea Chat</a>
             </div>
         </div>
     </nav>

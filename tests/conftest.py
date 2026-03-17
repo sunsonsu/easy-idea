@@ -2,7 +2,16 @@
 Test Configuration
 """
 
+import pathlib
+import sys
+
 import pytest
+
+# Make `app` package importable when running tests from repository root.
+_ROOT_DIR = pathlib.Path(__file__).resolve().parent.parent
+_SRC_DIR = _ROOT_DIR / "src"
+if str(_SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(_SRC_DIR))
 
 
 def pytest_addoption(parser):

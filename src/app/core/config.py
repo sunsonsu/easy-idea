@@ -1,8 +1,3 @@
-"""
-Configuration Management
-จัดการค่าตั้งค่าของแอปพลิเคชัน
-"""
-
 import os
 from typing import Optional
 from dotenv import load_dotenv
@@ -35,7 +30,7 @@ class Settings:
 
     # Gemini Model Configuration
     GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite")
-    GEMINI_EMBEDDING_MODEL: str = os.getenv("GEMINI_EMBEDDING_MODEL", "models/gemini-embedding-001")
+    GEMINI_EMBEDDING_MODEL: str = os.getenv("GEMINI_EMBEDDING_MODEL", "models/gemini-embedding-002")
     GEMINI_TEMPERATURE: float = float(os.getenv("GEMINI_TEMPERATURE", "0.7"))
 
     # RAG Configuration

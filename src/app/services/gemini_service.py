@@ -1,8 +1,3 @@
-"""
-Gemini AI Service
-จัดการการเรียกใช้ Gemini API พร้อม RAG
-"""
-
 import os
 from typing import Dict, Any, Optional, List
 from google import genai

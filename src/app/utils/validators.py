@@ -3,8 +3,45 @@ Input Validation Utilities
 ตรวจสอบความถูกต้องของข้อมูลนำเข้า
 """
 
+import unicodedata
 from typing import Optional
 from fastapi import HTTPException
+
+
+def _truncate_preserving_clusters(text: str, max_length: int) -> str:
+    """Truncate text without splitting combining marks from their base characters."""
+    if len(text) <= max_length:
+        return text
+
+    clusters = []
+    current_cluster = ""
+
+    for char in text:
+        if current_cluster and unicodedata.category(char).startswith("M"):
+            current_cluster += char
+            continue
+
+        if current_cluster:
+            clusters.append(current_cluster)
+        current_cluster = char
+
+    if current_cluster:
+        clusters.append(current_cluster)
+
+    truncated = []
+    current_length = 0
+    for cluster in clusters:
+        if current_length + len(cluster) > max_length:
+            break
+        truncated.append(cluster)
+        current_length += len(cluster)
+
+    result = "".join(truncated)
+    # Defensive cleanup for scripts with combining marks: never end with a mark.
+    while result and unicodedata.category(result[-1]).startswith("M"):
+        result = result[:-1]
+
+    return result
 
 
 def validate_text_length(
@@ -118,6 +155,6 @@ def sanitize_filename(filename: str) -> str:
     
     # จำกัดความยาว
     if len(filename) > 255:
-        filename = filename[:255]
+        filename = _truncate_preserving_clusters(filename, 255)
     
     return filename.strip()

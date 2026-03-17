@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+
+{% block title %}Easy Idea — Daily Trends{% endblock %}
+{% block nav_home %}bg-gray-800 text-indigo-300{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto px-4 py-8">
+
+    <!-- Hero Section -->
+    <div class="text-center mb-12">
+        <h1 class="text-4xl font-bold mb-3 bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
+            💡 Easy Idea Generator
+        </h1>
+        <p class="text-gray-400 text-lg mb-6">
+            ระบบสร้างและสรุปไอเดียคอนเทนต์อัตโนมัติทุกวัน เวลา 07:00
+        </p>
+        <div class="flex gap-3 justify-center">
+            <button id="generateNowBtn" onclick="generateNow()" 
+                class="px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 rounded-xl font-medium transition shadow-lg">
+                🔥 Generate Today's Idea Now
+            </button>
+            <button onclick="loadTrends()" 
+                class="px-6 py-3 bg-gray-800 hover:bg-gray-700 rounded-xl font-medium transition">
+                🔄 Refresh
+            </button>
+        </div>
+    </div>
+
+    <!-- Stats Bar -->
+    <div class="flex items-center justify-between mb-6 text-sm">
+        <div class="text-gray-400">
+            <span id="totalTrends">Loading...</span> generated ideas
+        </div>
+        <div class="text-gray-500">
+            Updated automatically every day at 07:00
+        </div>
+    </div>
+
+    <!-- Trends Grid -->
+    <div id="trendsContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <!-- Loading skeleton -->
+        <div class="col-span-full text-center py-12">
+            <div class="inline-flex gap-2 text-gray-500">
+                <span class="animate-bounce">●</span>
+                <span class="animate-bounce" style="animation-delay:.15s">●</span>
+                <span class="animate-bounce" style="animation-delay:.3s">●</span>
+                <span class="ml-2">Loading trends...</span>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let trends = [];
+
+async function loadTrends() {
+    try {
+        const container = document.getElementById('trendsContainer');
+        container.innerHTML = '<div class="col-span-full text-center py-12 text-gray-500">Loading...</div>';
+
+        const res = await fetch('/api/daily-trends');
+        if (!res.ok) {
+            throw new Error(`Request failed (${res.status})`);
+        }
+
+        const data = await res.json();
+        trends = data.trends || [];
+
+        document.getElementById('totalTrends').textContent = trends.length;
+
+        if (trends.length === 0) {
+            container.innerHTML = `
+                <div class="col-span-full text-center py-16">
+                    <div class="text-6xl mb-4">📭</div>
+                    <p class="text-gray-400 text-lg mb-4">ยังไม่มีไอเดียที่ generate</p>
+                    <p class="text-gray-500 text-sm">กดปุ่ม "Generate Today's Idea Now" เพื่อเริ่มต้น</p>
+                </div>`;
+            return;
+        }
+
+        container.innerHTML = trends.map(trend => {
+            const safeDocUrl = sanitizeHttpUrl(trend.doc_url);
+            const preview = trend.preview || '';
+
+            return `
+            <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 hover:border-indigo-700 transition group">
+                <div class="flex items-start justify-between mb-3">
+                    <div class="text-xs font-mono text-indigo-400">${escHtml(trend.date)}</div>
+                    ${safeDocUrl ? `
+                        <a href="${safeDocUrl}" target="_blank" rel="noopener noreferrer"
+                           class="text-xs text-gray-500 hover:text-indigo-400 transition">
+                            📄 Docs →
+                        </a>` : ''}
+                </div>
+                <h3 class="text-base font-semibold mb-2 text-gray-200 group-hover:text-indigo-300 transition line-clamp-2">
+                    ${escHtml(trend.topic)}
+                </h3>
+                <p class="text-sm text-gray-400 line-clamp-3 mb-3">
+                    ${escHtml(preview)}${preview.length >= 200 ? '…' : ''}
+                </p>
+                ${safeDocUrl ? `
+                    <a href="${safeDocUrl}" target="_blank" rel="noopener noreferrer"
+                       class="inline-flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 transition">
+                        Open in Google Docs →
+                    </a>` : 
+                    '<span class="text-xs text-gray-600">Document not available</span>'}
+            </div>
+        `}).join('');
+
+    } catch (e) {
+        console.error('Error loading trends:', e);
+        document.getElementById('trendsContainer').innerHTML = `
+            <div class="col-span-full text-center py-12 text-red-400">
+                ❌ Error loading trends: ${escHtml(e.message)}
+            </div>`;
+    }
+}
+
+async function generateNow() {
+    const btn = document.getElementById('generateNowBtn');
+    const originalText = btn.innerHTML;
+    
+    try {
+        btn.disabled = true;
+        btn.innerHTML = '⏳ Generating...';
+        
+        const key = localStorage.getItem('easy_idea_access_token');
+        if (!key) {
+            setApiKey();
+            return;
+        }
+
+        const res = await fetch('/daily-job', {
+            method: 'POST',
+            headers: { 'access_token': key }
+        });
+
+        if (res.status === 403) {
+            alert('Invalid access_token. Please set a valid token.');
+            setApiKey();
+            throw new Error('Invalid access_token');
+        }
+
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.detail || `Request failed (${res.status})`);
+        }
+
+        const result = await res.json();
+        
+        alert(`✅ Successfully generated!\n\nDate: ${result.date || 'Today'}\nChunks: ${result.ingested_chunks || 0}`);
+        
+        // Reload trends
+        await loadTrends();
+
+    } catch (e) {
+        alert('Error: ' + e.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+    }
+}
+
+function escHtml(text) { 
+    const d = document.createElement('div'); 
+    d.textContent = text || ''; 
+    return d.innerHTML; 
+}
+
+function sanitizeHttpUrl(rawUrl) {
+    if (!rawUrl) return '';
+    try {
+        const parsed = new URL(rawUrl, window.location.origin);
+        if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+            return parsed.href;
+        }
+    } catch (e) {
+        // Ignore invalid URLs and treat as unavailable.
+    }
+    return '';
+}
+
+// Load on page load
+loadTrends();
+</script>
+{% endblock %}

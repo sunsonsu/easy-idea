@@ -1,8 +1,3 @@
-"""
-Context Retrieval Module
-จัดการการค้นหาและดึงข้อมูลที่เกี่ยวข้องจาก Vector Database
-"""
-
 from typing import List, Dict, Any, Optional
 import chromadb
 from app.core.config import settings

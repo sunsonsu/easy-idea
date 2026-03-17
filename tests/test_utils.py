@@ -3,6 +3,7 @@ Tests สำหรับ Utils Module
 """
 
 import pytest
+import unicodedata
 from datetime import datetime
 from app.utils.validators import (
     validate_text_length,
@@ -56,6 +57,15 @@ def test_sanitize_filename():
     assert "?" not in result
 
 
+def test_sanitize_filename_preserves_thai_combining_marks_when_truncating():
+    """ทดสอบว่า truncate ชื่อไฟล์ไม่ตัดสระ/วรรณยุกต์ไทยทิ้งกลางคำ"""
+    filename = "เก่ง" * 100
+    result = sanitize_filename(filename)
+
+    assert len(result) <= 255
+    assert not unicodedata.category(result[-1]).startswith("M")
+
+
 def test_format_timestamp():
     """ทดสอบการ format timestamp"""
     dt = datetime(2026, 2, 24, 15, 30, 0)
@@ -80,6 +90,18 @@ def test_format_document_title():
     )
     assert "TEST" in title
     assert "Sample" in title or "topic" in title
+
+
+def test_format_document_title_preserves_thai_marks():
+    """ทดสอบว่าชื่อเอกสารภาษาไทยยังคงสระบน/ล่างครบ"""
+    topic = "เรื่องที่น่าสนใจเกี่ยวกับผู้ใช้งานในประเทศไทย"
+    title = format_document_title(
+        prefix="TEST",
+        topic=topic,
+        include_timestamp=False
+    )
+
+    assert title == f"TEST_{topic}"
 
 
 def test_validate_n_results_valid():

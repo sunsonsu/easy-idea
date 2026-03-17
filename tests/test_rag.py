@@ -39,11 +39,10 @@ def test_system_instruction():
 
 
 # Mock tests สำหรับ embeddings (ต้องการ API key)
-@pytest.mark.skipif(
-    not pytest.config.getoption("--run-integration"),
-    reason="Skip integration tests by default"
-)
-def test_gemini_embedding_function(monkeypatch):
+def test_gemini_embedding_function(request, monkeypatch):
     """ทดสอบ embedding function (integration test)"""
+    if not request.config.getoption("--run-integration"):
+        pytest.skip("Skip integration tests by default")
+
     # ต้องการ GEMINI_API_KEY จริงๆ
     pass

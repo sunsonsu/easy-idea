@@ -1,12 +1,9 @@
-"""
-Text Chunking Strategies
-จัดการการแบ่งข้อความเป็น chunks สำหรับ embedding
-"""
-
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from typing import List
 from app.core.config import settings
+from app.utils.logger import get_logger
 
+logger = get_logger(__name__)
 
 def get_text_splitter(
     chunk_size: int = None,
@@ -29,7 +26,6 @@ def get_text_splitter(
     if chunk_overlap is None:
         chunk_overlap = settings.DEFAULT_CHUNK_OVERLAP
     if separators is None:
-        # Default separators เหมาะสำหรับข้อความทั่วไป
         separators = ["\n\n", "\n", ". ", " ", ""]
     
     return RecursiveCharacterTextSplitter(
@@ -56,5 +52,5 @@ def split_text(
         รายการของ text chunks
     """
     splitter = get_text_splitter(chunk_size, chunk_overlap)
-    print(f"Splitting text into chunks with size {chunk_size} and overlap {chunk_overlap}...")
+    logger.info(f"Splitting text into chunks with size {chunk_size} and overlap {chunk_overlap}...")
     return splitter.split_text(text)

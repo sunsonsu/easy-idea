@@ -5,6 +5,44 @@ Text and Data Formatting Utilities
 
 from datetime import datetime
 from typing import Optional
+import unicodedata
+
+
+def _truncate_preserving_clusters(text: str, max_length: int) -> str:
+    """Truncate text without separating combining marks from base characters."""
+    if len(text) <= max_length:
+        return text
+
+    clusters = []
+    current_cluster = ""
+
+    for char in text:
+        if current_cluster and unicodedata.category(char).startswith("M"):
+            current_cluster += char
+            continue
+
+        if current_cluster:
+            clusters.append(current_cluster)
+        current_cluster = char
+
+    if current_cluster:
+        clusters.append(current_cluster)
+
+    truncated = []
+    current_length = 0
+    for cluster in clusters:
+        if current_length + len(cluster) > max_length:
+            break
+        truncated.append(cluster)
+        current_length += len(cluster)
+
+    return "".join(truncated)
+
+
+def _is_title_char(char: str) -> bool:
+    """Allow letters, digits, spaces, and combining marks used in Thai and other scripts."""
+    category = unicodedata.category(char)
+    return char.isalnum() or char.isspace() or category.startswith("M")
 
 
 def format_timestamp(
@@ -46,7 +84,8 @@ def truncate_text(
     if len(text) <= max_length:
         return text
     
-    return text[:max_length - len(suffix)] + suffix
+    truncated = _truncate_preserving_clusters(text, max_length - len(suffix))
+    return truncated + suffix
 
 
 def format_file_size(size_bytes: int) -> str:
@@ -86,10 +125,10 @@ def format_document_title(
     parts = [prefix]
     
     if topic:
-        # ตัดข้อความยาวๆ และลบตัวอักษรพิเศษ
-        clean_topic = truncate_text(topic, max_length=30, suffix="")
-        clean_topic = "".join(c if c.isalnum() or c.isspace() else "_" for c in clean_topic)
-        parts.append(clean_topic.strip())
+        # เก็บหัวข้อให้ครบที่สุด เพื่อไม่ให้ภาษาไทยขาดคำกลางประโยค
+        clean_topic = topic.strip()
+        clean_topic = "".join(c if _is_title_char(c) else "_" for c in clean_topic)
+        parts.append(" ".join(clean_topic.split()))
     
     if include_timestamp:
         parts.append(format_timestamp())

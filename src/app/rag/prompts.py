@@ -1,10 +1,4 @@
-"""
-RAG Prompt Templates
-เก็บ prompt templates สำหรับระบบ RAG
-"""
-
 from typing import Optional
-
 
 class RAGPromptTemplate:
     """จัดการ Prompt Templates สำหรับ RAG"""

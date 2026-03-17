@@ -24,7 +24,7 @@ from app.models.schemas import ContentRequest, IngestRequest
 
 # Import services
 from app.services.gemini_service import generate_with_rag, list_models
-from app.services.chroma_service import upsert_knowledge, get_collection_stats, list_documents
+from app.services.chroma_service import upsert_knowledge, get_collection_stats, list_documents, list_daily_trends
 from app.services.gdocs_service import create_doc
 
 # Import utilities
@@ -56,10 +56,11 @@ templates.env.globals["version"] = settings.VERSION
 # UI Pages (Jinja2 HTML)
 # ─────────────────────────────────────────────
 
+@app.get("/", response_class=HTMLResponse)
 @app.get("/ui", response_class=HTMLResponse)
 async def ui_home(request: Request):
-    """Redirect to chat page"""
-    return templates.TemplateResponse("chat.html", {"request": request})
+    """หน้า Home Dashboard — รายการ daily trends"""
+    return templates.TemplateResponse("home.html", {"request": request})
 
 
 @app.get("/ui/docs-list", response_class=HTMLResponse)
@@ -93,7 +94,16 @@ async def api_list_models(auth: str = Depends(get_api_key)):
     """ดึงรายการ Gemini models ที่รองรับ generateContent"""
     models = list_models()
     return {"models": models, "default": settings.GEMINI_MODEL}
-    return list_documents(limit=limit, offset=offset)
+
+
+@app.get("/api/daily-trends")
+async def api_daily_trends(limit: int = Query(30, ge=1, le=100)):
+    """
+    ดึงรายการ daily trends ที่ระบบ generate อัตโนมัติ
+    ไม่ต้องใช้ API key (public endpoint)
+    """
+    trends = list_daily_trends(limit=limit)
+    return {"trends": trends, "total": len(trends)}
 
 
 @app.on_event("startup")
@@ -120,17 +130,6 @@ async def shutdown_event():
     """เรียกเมื่อ application ปิดทำงาน"""
     _scheduler.shutdown(wait=False)
     logger.info(f"Shutting down {settings.PROJECT_NAME}")
-
-
-@app.get("/")
-def read_root():
-    """Health check endpoint"""
-    return {
-        "status": "Easy Idea RAG OK!", 
-        "version": settings.VERSION,
-        "auth": "API Key Required",
-        "project": settings.PROJECT_NAME
-    }
 
 
 @app.get("/health")
@@ -292,23 +291,26 @@ async def run_daily_job() -> dict:
         result = generate_with_rag(topic, use_search=True)
         result_text = result["answer"]
 
-        # 2. บันทึกลง ChromaDB
-        chunks = upsert_knowledge(
-            text=result_text,
-            metadata={
-                "source": f"daily_job:{today}",
-                "type": "daily_trend"
-            }
-        )
-        logger.info(f"[Daily Job] Ingested {chunks} chunks to ChromaDB")
-
-        # 3. บันทึกลง Google Docs
+        # 2. บันทึกลง Google Docs ก่อน
         doc_title = f"Daily_Trend_{today}"
         doc_url = create_doc(doc_title, result_text)
         if doc_url:
             logger.info(f"[Daily Job] Saved to Google Docs: {doc_url}")
         else:
             logger.warning("[Daily Job] Failed to save to Google Docs")
+
+        # 3. บันทึกลง ChromaDB พร้อม doc_url ใน metadata
+        chunks = upsert_knowledge(
+            text=result_text,
+            metadata={
+                "source": f"daily_job:{today}",
+                "type": "daily_trend",
+                "date": today,
+                "doc_url": doc_url or "",
+                "topic": topic
+            }
+        )
+        logger.info(f"[Daily Job] Ingested {chunks} chunks to ChromaDB")
 
         return {
             "status": "success",

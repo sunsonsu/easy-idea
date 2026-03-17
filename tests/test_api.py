@@ -18,7 +18,8 @@ def test_client():
 @pytest.fixture
 def mock_api_key(monkeypatch):
     """Mock API key สำหรับทดสอบ"""
-    monkeypatch.setenv("APP_API_KEY", "test_key_123")
+    from app.core.config import settings
+    monkeypatch.setattr(settings, "APP_API_KEY", "test_key_123")
     return "test_key_123"
 
 
@@ -26,12 +27,10 @@ def test_read_root(test_client):
     """ทดสอบ root endpoint"""
     response = test_client.get("/")
     assert response.status_code == 200
-    data = response.json()
-    assert "status" in data
-    assert "version" in data
+    assert "text/html" in response.headers.get("content-type", "")
 
 
-@patch('app.services.chroma_service.get_collection_stats')
+@patch('app.main.get_collection_stats')
 def test_health_check(mock_stats, test_client):
     """ทดสอบ health check endpoint"""
     mock_stats.return_value = {
@@ -46,7 +45,7 @@ def test_health_check(mock_stats, test_client):
     assert data["status"] == "healthy"
 
 
-@patch('app.services.chroma_service.upsert_knowledge')
+@patch('app.main.upsert_knowledge')
 def test_ingest_endpoint(mock_upsert, test_client, mock_api_key):
     """ทดสอบ ingest endpoint"""
     mock_upsert.return_value = 5
@@ -79,8 +78,8 @@ def test_ingest_without_auth(test_client):
     assert response.status_code == 403
 
 
-@patch('app.services.gemini_service.generate_with_rag')
-@patch('app.services.gdocs_service.create_doc')
+@patch('app.main.generate_with_rag')
+@patch('app.main.create_doc')
 def test_generate_endpoint(mock_create_doc, mock_generate, test_client, mock_api_key):
     """ทดสอบ generate endpoint"""
     mock_generate.return_value = {
