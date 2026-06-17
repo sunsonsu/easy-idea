@@ -23,14 +23,23 @@ class Settings:
     # Google Services
     GOOGLE_DRIVE_FOLDER_ID: Optional[str] = os.getenv("GOOGLE_DRIVE_FOLDER_ID")
     
-    # ChromaDB Configuration
+    # ChromaDB Configuration (legacy; kept for __repr__ / backward compat)
     CHROMA_HOST: str = os.getenv("CHROMA_HOST", "chromadb")
     CHROMA_PORT: int = int(os.getenv("CHROMA_PORT", "8000"))
+    # Collection / Firestore-collection name (reused as the Firestore collection)
     CHROMA_COLLECTION_NAME: str = os.getenv("CHROMA_COLLECTION_NAME", "easy_idea_kb")
+
+    # Google Cloud Firestore (vector search) Configuration
+    GOOGLE_CLOUD_PROJECT: str = os.getenv("GOOGLE_CLOUD_PROJECT", "")
+    FIRESTORE_DATABASE: str = os.getenv("FIRESTORE_DATABASE", "(default)")
+    FIRESTORE_COLLECTION: str = os.getenv("FIRESTORE_COLLECTION", os.getenv("CHROMA_COLLECTION_NAME", "easy_idea_kb"))
 
     # Gemini Model Configuration
     GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite")
-    GEMINI_EMBEDDING_MODEL: str = os.getenv("GEMINI_EMBEDDING_MODEL", "models/gemini-embedding-002")
+    GEMINI_EMBEDDING_MODEL: str = os.getenv("GEMINI_EMBEDDING_MODEL", "models/gemini-embedding-001")
+    # gemini-embedding-002 natively returns 3072 dims; Firestore vector index caps at 2048.
+    # MRL lets us request a smaller output. Must match the Firestore index dimension.
+    EMBEDDING_DIMENSION: int = int(os.getenv("EMBEDDING_DIMENSION", "1536"))
     GEMINI_TEMPERATURE: float = float(os.getenv("GEMINI_TEMPERATURE", "0.7"))
 
     # RAG Configuration

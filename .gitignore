@@ -4,3 +4,13 @@ credentials.json
 token.json
 service-account.json
 __pycache__/
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+crash.log
+crash.*.log
+# keep .terraform.lock.hcl committed (locks provider versions)
+!.terraform.lock.hcl

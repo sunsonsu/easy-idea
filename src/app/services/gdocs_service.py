@@ -57,6 +57,9 @@ def get_common_creds():
         if creds and creds.expired and creds.refresh_token:
             logger.info("Refreshing expired credentials")
             creds.refresh(Request())
+            # ponytail: persist refreshed token so next cold start skips network refresh
+            if not token_json_str and _TOKEN_FILE.exists():
+                _TOKEN_FILE.write_text(creds.to_json())
             
         if not creds:
             raise Exception("Credential NOT FOUND: Please run auth_setup.py first")

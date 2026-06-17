@@ -1,0 +1,12 @@
+# Copy to terraform.tfvars (gitignored) and fill in.
+#   cp terraform.tfvars.example terraform.tfvars
+
+project_id = "your-gcp-project-id"   # must exist, billing enabled
+
+# Optional — defaults shown
+# region              = "asia-southeast1"
+# firestore_location  = "asia-southeast1"   # PERMANENT after first apply
+# image_tag           = "v1"
+# drive_folder_id     = ""                  # Google Drive folder for saved docs
+# embedding_dimension = 1536                # must match settings.EMBEDDING_DIMENSION
+# collection_name     = "easy_idea_kb"
