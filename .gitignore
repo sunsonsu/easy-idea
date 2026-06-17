@@ -13,4 +13,4 @@ __pycache__/
 crash.log
 crash.*.log
 # keep .terraform.lock.hcl committed (locks provider versions)
-!.terraform.lock.hcl
+!.terraform.lock.hcllogs/

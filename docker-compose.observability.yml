@@ -39,6 +39,26 @@ services:
     networks:
       - easy-idea-observability
 
+  loki:
+    image: grafana/loki:3.0.0
+    command: -config.file=/etc/loki/config.yaml
+    volumes:
+      - ./observability/loki-config.yaml:/etc/loki/config.yaml
+    ports:
+      - "3100:3100"
+    networks:
+      - easy-idea-observability
+
+  promtail:
+    image: grafana/promtail:3.0.0
+    volumes:
+      - ./logs:/var/log/app:ro
+      - ./observability/promtail-config.yaml:/etc/promtail/config.yml
+    networks:
+      - easy-idea-observability
+    depends_on:
+      - loki
+
   grafana:
     image: grafana/grafana:11.4.0
     environment:
@@ -54,3 +74,4 @@ services:
     depends_on:
       - prometheus
       - jaeger
+      - loki
