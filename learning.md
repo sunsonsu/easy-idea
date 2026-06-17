@@ -53,3 +53,140 @@ ChromaDB → Firestore code swap → Terraform-provisioned GCP → image build/p
 - `token.json` (Google Docs OAuth) — inject as a Secret Manager **volume mount** (it's a file, not env). Deferred.
 - Use `:v2`+ image tags on rebuilds, not reuse `:v1` (Cloud Run caches by digest).
 - Optional: move `embedding_dimension` to a tfvars variable instead of hardcoded 1536.
+
+---
+
+# Learning — Observability Stack (2026-06-17)
+
+Built full observability for the FastAPI app locally:
+**OpenTelemetry SDK → OTel Collector → Jaeger (traces) + Prometheus (metrics) → Grafana (RED dashboard)**
+
+---
+
+## The Pipeline
+
+```
+App (FastAPI)
+  │
+  │  OTLP gRPC :4317
+  ▼
+OTel Collector
+  ├── traces → Jaeger :4317 (internal)
+  └── metrics → Prometheus scrapes :8889
+                    │
+                    ▼
+                Grafana :3001
+```
+
+---
+
+## Setup Order (don't skip steps)
+
+1. Install OTel packages
+2. Write `observability.py` + wire into `main.py`
+3. Write Collector config (`otel-collector-config.yaml`)
+4. Write Prometheus scrape config (`prometheus.yml`)
+5. Write Grafana provisioning files (datasources + dashboard JSON)
+6. Write `docker-compose.observability.yml`
+7. `docker compose up -d` (backends first)
+8. Start app with `OTEL_EXPORTER_OTLP_ENDPOINT=localhost:4317`
+9. Send traffic, wait 20–30s, open Grafana
+
+---
+
+## Packages
+
+```
+opentelemetry-sdk==1.39.1
+opentelemetry-exporter-otlp-proto-grpc==1.39.1
+opentelemetry-semantic-conventions==0.60b1
+opentelemetry-instrumentation-fastapi==0.60b1   # auto-instruments every route
+opentelemetry-instrumentation-httpx==0.60b1     # auto-instruments outbound HTTP calls
+```
+
+`instrumentation-*` version must match `semantic-conventions` version — mismatch = wrong metric names = empty Grafana panels.
+
+---
+
+## Key Lessons
+
+| Concept | Detail |
+|---------|--------|
+| **Fail-soft** | OTel uses async BatchSpanProcessor — Collector down = app still works, data dropped silently |
+| **Resource** | `Resource.create({"service.name": "..."})` is how Jaeger knows which service sent the trace |
+| **`instrument_app(app)` timing** | Must call after `FastAPI()` is created, before routes are defined |
+| **Collector image** | Use `otel/opentelemetry-collector-contrib`, NOT base — base missing Prometheus exporter |
+| **Jaeger OTLP** | Must set `COLLECTOR_OTLP_ENABLED=true` — default protocol is old Thrift, not OTLP |
+| **Prometheus pulls** | Prometheus scrapes Collector's `:8889` every 10s — it does NOT receive pushed data |
+| **`rate()` needs time** | `rate()` calculates from 2+ data points — always zero until 2 scrapes complete (~20s) |
+| **`service.pipelines` required** | Without it, Collector receives data but forwards nothing — silent failure |
+| **Metric name gotcha** | Verify real names at `http://localhost:8889/metrics` before writing PromQL. This app: `http_server_duration_milliseconds_count` (old semconv), NOT `http_server_request_duration_seconds` (new semconv) |
+| **Wrong PromQL** | Empty panel, zero error message — hardest bug to spot |
+
+---
+
+## RED Dashboard Queries (this app)
+
+```promql
+# Rate (req/s)
+sum(rate(http_server_duration_milliseconds_count[1m])) by (http_target)
+
+# Error rate (5xx)
+sum(rate(http_server_duration_milliseconds_count{http_status_code=~"5.."}[1m]))
+
+# Latency p95 (ms)
+histogram_quantile(0.95, sum(rate(http_server_duration_milliseconds_bucket[5m])) by (le))
+```
+
+Labels on this app's metrics: `http_status_code`, `http_target` (not `http_route`/`http_response_status_code`).
+
+---
+
+## Why "Add Loki Datasource" in Grafana Logs Tab
+
+Grafana handles **three signal types** separately:
+
+| Signal | Backend | Status |
+|--------|---------|--------|
+| Metrics | Prometheus | ✅ set up |
+| Traces | Jaeger | ✅ set up |
+| **Logs** | **Loki** | ❌ not set up |
+
+We wired metrics + traces but never added Loki. Grafana's Explore → Logs tab expects a Loki datasource — without it, the tab is empty and says "add Loki datasource."
+
+**To add logs later:**
+1. Run Loki container (`grafana/loki:3.0.0`)
+2. Run Promtail (reads log files, ships to Loki) OR add `loki` exporter to OTel Collector
+3. Add Loki datasource to `datasources.yml` (`url: http://loki:3100`)
+4. Grafana Logs tab works
+
+Loki is optional for resume/demo — metrics + traces already cover the RED method. Add Loki when you want log correlation (click a trace → see logs for that request).
+
+---
+
+## Files Created
+
+```
+src/app/core/observability.py
+observability/
+├── otel-collector-config.yaml
+├── prometheus.yml
+└── grafana/provisioning/
+    ├── datasources/datasources.yml
+    └── dashboards/
+        ├── dashboards.yml
+        └── red-dashboard.json
+docker-compose.observability.yml
+```
+
+## Run Commands
+
+```bash
+docker compose -f docker-compose.observability.yml up -d
+OTEL_EXPORTER_OTLP_ENDPOINT=localhost:4317 python src/app/main.py
+
+# Access
+# Grafana:    http://localhost:3001  → easy-idea RED dashboard
+# Jaeger:     http://localhost:16686
+# Prometheus: http://localhost:9090
+```

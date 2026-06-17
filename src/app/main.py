@@ -18,6 +18,7 @@ from fastapi.templating import Jinja2Templates
 # Import configurations และ security
 from app.core.config import settings
 from app.core.security import get_api_key
+from app.core.observability import setup_observability
 
 # Import schemas
 from app.models.schemas import ContentRequest, IngestRequest
@@ -50,6 +51,9 @@ app = FastAPI(
 _template_dir = pathlib.Path(__file__).resolve().parent / "templates"
 templates = Jinja2Templates(directory=str(_template_dir))
 templates.env.globals["version"] = settings.VERSION
+
+# OpenTelemetry — traces + metrics → OTLP Collector (fail-soft if Collector down)
+setup_observability(app)
 
 
 # ─────────────────────────────────────────────
